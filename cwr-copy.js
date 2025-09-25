@@ -1,0 +1,287 @@
+$(document).ready(function () {
+    function addClipboardFunctionality() {
+        // Add clipboard functionality to <pre> elements
+        $("pre").each(function () {
+            var $this = $(this);
+
+            // Check if the clipboard button is already added
+            if ($this.find(".clipboard-button").length === 0) {
+                // Create the clipboard button with improved styling
+                var buttonHtml = $(
+                    '<button class="clipboard-button" style="' +
+                    'position: absolute; ' +
+                    'top: 0.5rem; ' +
+                    'right: 0.5rem; ' +
+                    'z-index: 10000; ' +
+                    'color: #3DD1A5; ' +
+                    'background: rgba(0, 0, 0, 0.7); ' +
+                    'border: 1px solid rgba(61, 209, 165, 0.3); ' +
+                    'border-radius: 4px; ' +
+                    'padding: 0.5rem; ' +
+                    'cursor: pointer; ' +
+                    'font-size: 0.875rem; ' +
+                    'transition: all 0.3s ease; ' +
+                    'display: none; ' +
+                    'backdrop-filter: blur(10px); ' +
+                    'box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);' +
+                    '" title="Copy to clipboard">' +
+                    '<i class="fa fa-clipboard" aria-hidden="true"></i>' +
+                    '</button>'
+                );
+
+                // Enhanced click functionality with smart content detection
+                buttonHtml.on("click", function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    var text = getClipboardText($this);
+
+                    // Copy to clipboard
+                    navigator.clipboard.writeText(text).then(function () {
+                        // Success feedback with improved animation
+                        buttonHtml.html('<i class="fa fa-check" aria-hidden="true"></i>')
+                                 .css({
+                                     'color': '#22c55e',
+                                     'border-color': 'rgba(34, 197, 94, 0.5)',
+                                     'background': 'rgba(34, 197, 94, 0.1)'
+                                 });
+                        
+                        setTimeout(function () {
+                            buttonHtml.html('<i class="fa fa-clipboard" aria-hidden="true"></i>')
+                                     .css({
+                                         'color': '#3DD1A5',
+                                         'border-color': 'rgba(61, 209, 165, 0.3)',
+                                         'background': 'rgba(0, 0, 0, 0.7)'
+                                     });
+                        }, 2000);
+                    }).catch(function (err) {
+                        console.error("Clipboard write failed:", err);
+                        
+                        // Error feedback
+                        buttonHtml.html('<i class="fa fa-exclamation-triangle" aria-hidden="true"></i>')
+                                 .css({
+                                     'color': '#ef4444',
+                                     'border-color': 'rgba(239, 68, 68, 0.5)',
+                                     'background': 'rgba(239, 68, 68, 0.1)'
+                                 });
+                        
+                        setTimeout(function () {
+                            buttonHtml.html('<i class="fa fa-clipboard" aria-hidden="true"></i>')
+                                     .css({
+                                         'color': '#3DD1A5',
+                                         'border-color': 'rgba(61, 209, 165, 0.3)',
+                                         'background': 'rgba(0, 0, 0, 0.7)'
+                                     });
+                        }, 2000);
+                    });
+                });
+
+                // Ensure parent is positioned relatively
+                if ($this.css('position') === 'static') {
+                    $this.css('position', 'relative');
+                }
+
+                // Append the button to the <pre> element
+                $this.append(buttonHtml);
+
+                // Enhanced hover functionality with better positioning
+                $this.hover(
+                    function () {
+                        // Show button with fade in
+                        buttonHtml.stop().fadeIn(200).css({
+                            'transform': 'translateY(0)',
+                            'opacity': '1'
+                        });
+                        
+                        // Adjust position based on content height
+                        var preHeight = $this.outerHeight();
+                        if (preHeight < 60) {
+                            buttonHtml.css('top', '0.25rem');
+                        } else {
+                            buttonHtml.css('top', '0.5rem');
+                        }
+                    },
+                    function () {
+                        // Hide button with fade out
+                        buttonHtml.stop().fadeOut(150);
+                    }
+                );
+
+                // Handle scrolling within pre elements
+                $this.on('scroll', function() {
+                    if ($this.is(':hover')) {
+                        buttonHtml.css('display', 'block');
+                    }
+                });
+            }
+        });
+    }
+
+    // Smart content detection function
+    function getClipboardText($preElement) {
+        // Check if this is a terminal command (has terminal-command class)
+        if ($preElement.hasClass('terminal-command')) {
+            return $preElement.text().trim();
+        }
+
+        // Check if this is inside a terminal block
+        var terminalBlock = $preElement.closest('.terminal-block');
+        if (terminalBlock.length > 0) {
+            // Look for terminal-command class within the terminal block
+            var terminalCommand = terminalBlock.find('pre.terminal-command');
+            if (terminalCommand.length > 0) {
+                return terminalCommand.text().trim();
+            }
+            
+            // Fallback: extract command from terminal content
+            return extractTerminalCommand($preElement);
+        }
+
+        // Check if this is inside an IDE block
+        var ideBlock = $preElement.closest('.ide-block');
+        if (ideBlock.length > 0) {
+            return extractIdeCode($preElement);
+        }
+
+        // Default behavior for other pre elements
+        return $preElement.clone()
+            .find('.clipboard-button')
+            .remove()
+            .end()
+            .text()
+            .trim()
+            .replace(/\s+$/gm, '') // Remove trailing whitespace from lines
+            .replace(/^\\s*\\n/, ''); // Remove leading empty lines
+    }
+
+    // Extract terminal command without prompt
+    function extractTerminalCommand($preElement) {
+        var fullText = $preElement.text();
+        var lines = fullText.split('\\n');
+        var commands = [];
+        
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i].trim();
+            if (line) {
+                // Skip common prompt patterns
+                if (line.match(/^[\\w@\\-\\.]+[:#\\$]\\s/)) {
+                    // Extract command after prompt
+                    var commandMatch = line.match(/^[\\w@\\-\\.\\(\\)\\[\\]\\s~]+[:#\\$]\\s+(.+)$/);
+                    if (commandMatch && commandMatch[1]) {
+                        commands.push(commandMatch[1]);
+                    }
+                } else if (line.match(/^┌──|^└──/)) {
+                    // Skip Kali Linux fancy prompt decorations
+                    continue;
+                } else if (line.match(/^\\s*[>#\\$]\\s/)) {
+                    // Handle simple prompts
+                    var simpleCommand = line.replace(/^\\s*[>#\\$]\\s+/, '');
+                    if (simpleCommand) {
+                        commands.push(simpleCommand);
+                    }
+                } else if (!line.match(/^[\\w@\\-\\.\\s\\(\\)\\[\\]~]+[:#\\$]\\s*$/) && 
+                          !line.match(/Starting|Nmap|PORT|tcp|open|service/)) {
+                    // This looks like output, skip it unless it's a clear command
+                    if (line.match(/^[a-zA-Z][\\w\\-\\.]+/)) {
+                        commands.push(line);
+                    }
+                }
+            }
+        }
+        
+        return commands.length > 0 ? commands.join('\\n') : fullText.trim();
+    }
+
+    // Extract IDE code without line numbers
+    function extractIdeCode($preElement) {
+        var $clone = $preElement.clone();
+        
+        // Remove clipboard button
+        $clone.find('.clipboard-button').remove();
+        
+        // Get text content
+        var text = $clone.text();
+        
+        // Split into lines and process
+        var lines = text.split('\\n');
+        var codeLines = [];
+        
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i];
+            
+            // Skip line numbers (lines that start with just numbers and whitespace)
+            if (line.match(/^\\s*\\d+\\s*$/)) {
+                continue;
+            }
+            
+            // Remove line numbers from the beginning of lines
+            var cleanLine = line.replace(/^\\s*\\d+\\s+/, '');
+            
+            if (cleanLine.trim()) {
+                codeLines.push(cleanLine);
+            }
+        }
+        
+        return codeLines.length > 0 ? codeLines.join('\\n') : text.trim();
+    }
+
+    // Enhanced global function for manual triggering
+    window.addClipboardFunctionality = addClipboardFunctionality;
+
+    // Apply clipboard functionality on page load
+    addClipboardFunctionality();
+
+    // Handle dynamic content changes - Thinkific CoursePlayerV2 compatibility
+    if (typeof CoursePlayerV2 !== "undefined") {
+        CoursePlayerV2.on("hooks:contentDidChange", function () {
+            setTimeout(addClipboardFunctionality, 1000);
+        });
+    }
+
+    // Additional fallback for dynamic content using MutationObserver
+    if (typeof MutationObserver !== "undefined") {
+        var observer = new MutationObserver(function(mutations) {
+            var shouldReapply = false;
+            
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'childList') {
+                    mutation.addedNodes.forEach(function(node) {
+                        if (node.nodeType === Node.ELEMENT_NODE) {
+                            // Check if new pre elements were added
+                            if (node.tagName === 'PRE' || $(node).find('pre').length > 0) {
+                                shouldReapply = true;
+                            }
+                        }
+                    });
+                }
+            });
+            
+            if (shouldReapply) {
+                setTimeout(addClipboardFunctionality, 100);
+            }
+        });
+
+        // Start observing the document for changes
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+    }
+
+    // Handle window resize for better positioning
+    $(window).on('resize', function() {
+        $('.clipboard-button').each(function() {
+            var $button = $(this);
+            var $pre = $button.closest('pre');
+            
+            if ($pre.length > 0) {
+                var preHeight = $pre.outerHeight();
+                if (preHeight < 60) {
+                    $button.css('top', '0.25rem');
+                } else {
+                    $button.css('top', '0.5rem');
+                }
+            }
+        });
+    });
+});
