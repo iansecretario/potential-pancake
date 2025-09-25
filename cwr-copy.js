@@ -1,12 +1,54 @@
 $(document).ready(function () {
     function addClipboardFunctionality() {
-        // Add clipboard functionality to <pre> elements
+        // Add clipboard functionality to relevant <pre> elements
         $("pre").each(function () {
             var $this = $(this);
 
-            // Check if the clipboard button is already added
-            if ($this.find(".clipboard-button").length === 0) {
-                // Create the clipboard button with improved styling
+            // Skip if clipboard button is already added
+            if ($this.find(".clipboard-button").length > 0) {
+                return;
+            }
+
+            // Only add clipboard to specific types of pre elements
+            var shouldAddClipboard = false;
+            
+            // 1. Pre elements with terminal-command class
+            if ($this.hasClass('terminal-command')) {
+                shouldAddClipboard = true;
+            }
+            // 2. Pre elements inside terminal blocks (but not if they're just output)
+            else if ($this.closest('.terminal-block').length > 0) {
+                // Only add to terminal blocks if this pre contains actual commands
+                var terminalBlock = $this.closest('.terminal-block');
+                var hasTerminalCommand = terminalBlock.find('pre.terminal-command').length > 0;
+                
+                // If there's a specific terminal-command pre, only add button to that one
+                if (hasTerminalCommand) {
+                    shouldAddClipboard = $this.hasClass('terminal-command');
+                } else {
+                    // Legacy terminal without specific command pre - add button to main pre
+                    shouldAddClipboard = true;
+                }
+            }
+            // 3. Pre elements inside IDE blocks
+            else if ($this.closest('.ide-block').length > 0) {
+                shouldAddClipboard = true;
+            }
+            // 4. Standalone pre elements (not inside terminal or IDE blocks)
+            else if ($this.closest('.terminal-block').length === 0 && 
+                     $this.closest('.ide-block').length === 0) {
+                // Check if it looks like code or command content
+                var text = $this.text().trim();
+                if (text.length > 0 && !text.match(/^\s*(Starting|PORT|tcp|open|service|Nmap)/i)) {
+                    shouldAddClipboard = true;
+                }
+            }
+
+            if (!shouldAddClipboard) {
+                return;
+            }
+            
+            // Create the clipboard button with improved styling
                 var buttonHtml = $(
                     '<button class="clipboard-button" style="' +
                     'position: absolute; ' +
@@ -76,16 +118,53 @@ $(document).ready(function () {
                     });
                 });
 
-                // Ensure parent is positioned relatively
-                if ($this.css('position') === 'static') {
-                    $this.css('position', 'relative');
+                // Determine where to position the button
+                var $buttonParent = $this;
+                var $terminalBlock = $this.closest('.terminal-block');
+                var $ideBlock = $this.closest('.ide-block');
+                
+                // If this is inside a terminal block, position button on the terminal block
+                if ($terminalBlock.length > 0) {
+                    $buttonParent = $terminalBlock;
+                    // Ensure terminal block is positioned relatively
+                    if ($terminalBlock.css('position') === 'static') {
+                        $terminalBlock.css('position', 'relative');
+                    }
+                    // Check if terminal block already has a clipboard button
+                    if ($terminalBlock.find('.clipboard-button').length > 0) {
+                        return; // Skip if button already exists on this terminal
+                    }
+                }
+                // If this is inside an IDE block, position button on the IDE block
+                else if ($ideBlock.length > 0) {
+                    $buttonParent = $ideBlock;
+                    // Ensure IDE block is positioned relatively
+                    if ($ideBlock.css('position') === 'static') {
+                        $ideBlock.css('position', 'relative');
+                    }
+                    // Check if IDE block already has a clipboard button
+                    if ($ideBlock.find('.clipboard-button').length > 0) {
+                        return; // Skip if button already exists on this IDE
+                    }
+                } else {
+                    // For standalone elements, ensure parent is positioned relatively
+                    if ($this.css('position') === 'static') {
+                        $this.css('position', 'relative');
+                    }
                 }
 
-                // Append the button to the <pre> element
-                $this.append(buttonHtml);
+                // Append the button to the appropriate parent
+                $buttonParent.append(buttonHtml);
 
                 // Enhanced hover functionality with better positioning
-                $this.hover(
+                var $hoverTarget = $this;
+                if ($terminalBlock.length > 0) {
+                    $hoverTarget = $terminalBlock;
+                } else if ($ideBlock.length > 0) {
+                    $hoverTarget = $ideBlock;
+                }
+                
+                $hoverTarget.hover(
                     function () {
                         // Show button with fade in
                         buttonHtml.stop().fadeIn(200).css({
@@ -93,12 +172,21 @@ $(document).ready(function () {
                             'opacity': '1'
                         });
                         
-                        // Adjust position based on content height
-                        var preHeight = $this.outerHeight();
-                        if (preHeight < 60) {
-                            buttonHtml.css('top', '0.25rem');
-                        } else {
+                        // Adjust position based on content height and type
+                        if ($terminalBlock.length > 0) {
+                            // For terminal blocks, position relative to the header
                             buttonHtml.css('top', '0.5rem');
+                        } else if ($ideBlock.length > 0) {
+                            // For IDE blocks, position in top-right corner
+                            buttonHtml.css('top', '0.5rem');
+                        } else {
+                            // For standalone elements, use original logic
+                            var targetHeight = $hoverTarget.outerHeight();
+                            if (targetHeight < 60) {
+                                buttonHtml.css('top', '0.25rem');
+                            } else {
+                                buttonHtml.css('top', '0.5rem');
+                            }
                         }
                     },
                     function () {
@@ -107,14 +195,14 @@ $(document).ready(function () {
                     }
                 );
 
-                // Handle scrolling within pre elements
-                $this.on('scroll', function() {
-                    if ($this.is(':hover')) {
+                // Handle scrolling within elements
+                $hoverTarget.on('scroll', function() {
+                    if ($hoverTarget.is(':hover')) {
                         buttonHtml.css('display', 'block');
                     }
                 });
-            }
         });
+    }
     }
 
     // Smart content detection function
