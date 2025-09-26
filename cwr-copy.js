@@ -287,30 +287,35 @@ $(document).ready(function () {
         // Remove clipboard button
         $clone.find('.clipboard-button').remove();
         
-        // Get text content
+        // Check if it's a pre.ide-content element (new format without line numbers)
+        if ($preElement.hasClass('ide-content')) {
+            // For the new IDE format, just return the text as-is
+            return $clone.text();
+        }
+        
+        // Legacy format with line numbers embedded in the text
         var text = $clone.text();
         
         // Split into lines and process
-        var lines = text.split('\\n');
+        var lines = text.split('\n');
         var codeLines = [];
         
         for (var i = 0; i < lines.length; i++) {
             var line = lines[i];
             
             // Skip line numbers (lines that start with just numbers and whitespace)
-            if (line.match(/^\\s*\\d+\\s*$/)) {
+            if (line.match(/^\s*\d+\s*$/)) {
                 continue;
             }
             
             // Remove line numbers from the beginning of lines
-            var cleanLine = line.replace(/^\\s*\\d+\\s+/, '');
+            var cleanLine = line.replace(/^\s*\d+\s+/, '');
             
-            if (cleanLine.trim()) {
-                codeLines.push(cleanLine);
-            }
+            // IMPORTANT: Preserve empty lines
+            codeLines.push(cleanLine);
         }
         
-        return codeLines.length > 0 ? codeLines.join('\\n') : text.trim();
+        return codeLines.join('\n');
     }
 
     // Enhanced global function for manual triggering
