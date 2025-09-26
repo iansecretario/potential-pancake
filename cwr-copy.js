@@ -231,16 +231,14 @@ $(document).ready(function () {
             // Find the pre.ide-content element within the IDE block
             var ideContent = ideBlock.find('pre.ide-content');
             if (ideContent.length > 0) {
-                // Clone and clean
-                var $clone = ideContent.clone();
-                $clone.find('.clipboard-button').remove();
+                // Get the text content directly from the pre element
+                var content = ideContent[0].textContent;
                 
-                // Get text content
-                var content = $clone[0].textContent;
-                
-                // Manual fix: Add back the empty line between imports and comment
-                // This is a workaround for browser issues with contenteditable pre elements
-                content = content.replace(/^(import socket\nimport sys\nimport struct\n)(#)/m, '$1\n$2');
+                // Fix: Add missing empty line between import statements and comments
+                // This is a common issue with contenteditable pre elements losing empty lines
+                if (content.includes('import struct\n#')) {
+                    content = content.replace(/import struct\n#/g, 'import struct\n\n#');
+                }
                 
                 return content;
             }
@@ -301,17 +299,13 @@ $(document).ready(function () {
     function extractIdeCode($preElement) {
         // Check if it's a pre.ide-content element (new format without line numbers)
         if ($preElement.hasClass('ide-content')) {
-            // Clone to avoid modifying the original
-            var $clone = $preElement.clone();
+            // Get text content directly
+            var content = $preElement[0].textContent;
             
-            // Remove any clipboard buttons that might be inside
-            $clone.find('.clipboard-button').remove();
-            
-            // Get text content
-            var content = $clone[0].textContent;
-            
-            // Manual fix for missing empty line
-            content = content.replace(/^(import socket\nimport sys\nimport struct\n)(#)/m, '$1\n$2');
+            // Fix: Add missing empty line between import statements and comments
+            if (content.includes('import struct\n#')) {
+                content = content.replace(/import struct\n#/g, 'import struct\n\n#');
+            }
             
             return content;
         }
