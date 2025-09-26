@@ -1,3 +1,4 @@
+
 $(document).ready(function () {
     // Detect if we're running in Thinkific environment
     var isThinkific = (typeof CoursePlayerV2 !== "undefined" || 
@@ -174,6 +175,12 @@ $(document).ready(function () {
 
     // Enhanced clipboard text extraction with perfect visual preservation
     function getEnhancedClipboardText($preElement) {
+        // Check if this is inside an IDE block with line numbers
+        var $ideBlock = $preElement.closest('.ide-block');
+        if ($ideBlock.length > 0) {
+            return getIdeCodeWithLineNumbers($preElement);
+        }
+        
         return getPerfectVisualText($preElement);
     }
     
@@ -200,6 +207,60 @@ $(document).ready(function () {
         
         // Only remove truly invisible characters, preserve ALL visual formatting
         return cleanInvisibleCharacters(text);
+    }
+    
+    // Specialized IDE code extraction that handles line numbers intelligently
+    function getIdeCodeWithLineNumbers($preElement) {
+        var $ideBlock = $preElement.closest('.ide-block');
+        
+        // Method 1: Try to find separate line number and code containers
+        var $lineNumbers = $ideBlock.find('.line-numbers, .line-number');
+        var $codeContent = $ideBlock.find('.code-content, .code, pre');
+        
+        if ($lineNumbers.length > 0 && $codeContent.length > 0) {
+            // Extract code content without line numbers
+            return getPerfectVisualText($codeContent.last());
+        }
+        
+        // Method 2: Handle inline line numbers (numbers at start of each line)
+        var fullText = getPerfectVisualText($preElement);
+        var lines = fullText.split('\n');
+        var codeLines = [];
+        var hasLineNumbers = false;
+        
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i];
+            
+            // Check if line starts with a number followed by whitespace
+            var lineNumberMatch = line.match(/^\s*(\d+)\s+(.*)$/);
+            if (lineNumberMatch) {
+                hasLineNumbers = true;
+                var lineNumber = parseInt(lineNumberMatch[1]);
+                var codeContent = lineNumberMatch[2];
+                
+                // Only include if the line number makes sense (sequential)
+                if (lineNumber === i + 1 || lineNumber === codeLines.length + 1) {
+                    codeLines.push(codeContent);
+                } else {
+                    // Not a line number, include the whole line
+                    codeLines.push(line);
+                }
+            } else if (line.match(/^\s*\d+\s*$/) && hasLineNumbers) {
+                // Line with just a number - skip it (it's likely a line number on its own)
+                continue;
+            } else {
+                // Regular line, keep as is
+                codeLines.push(line);
+            }
+        }
+        
+        // If we found line numbers, return the cleaned code
+        if (hasLineNumbers && codeLines.length > 0) {
+            return codeLines.join('\n');
+        }
+        
+        // Method 3: Fallback to regular text extraction
+        return fullText;
     }
     
     // Clean only invisible/control characters that don't affect visual layout
