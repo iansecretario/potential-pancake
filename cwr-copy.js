@@ -1,77 +1,102 @@
-<script>
-// Helper: get exact code from a <pre>
-function getPreRaw(preEl) {
-  // Highest priority: explicit data-raw (lets you bypass any DOM munging)
-  if (preEl.hasAttribute('data-raw')) return preEl.getAttribute('data-raw');
-
-  // If author wrapped each line in <span>, rebuild with \n manually (ignores visual line numbers)
-  const spans = preEl.querySelectorAll(':scope > span');
-  if (spans.length) {
-    return Array.from(spans).map(s => s.textContent).join('\n');
+// clipboard-snippet.js
+(function () {
+  // --- helpers ---
+  function getPreText(preEl) {
+    // If author lined code with <span> per line, rebuild with explicit \n
+    const spans = preEl.querySelectorAll(':scope > span');
+    if (spans.length) return Array.from(spans).map(s => s.textContent).join('\n');
+    // Else: raw textContent, normalize CRLF -> LF
+    return preEl.textContent.replace(/\r\n/g, '\n');
   }
 
-  // Fallback: raw DOM text (NOT innerHTML, NOT jQuery.text()), normalize CRLF to LF
-  return preEl.textContent.replace(/\r\n/g, '\n');
-}
-
-// Helper: write to clipboard with fallback
-async function copyTextExactly(text) {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    const ta = document.createElement('textarea');
-    ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
-    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
-    return true;
+  async function copyTextExactly(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
   }
-}
-</script>
 
-<!-- jQuery-based auto "Copy" for all <pre> -->
-<script>
-// Requires jQuery on the page
-$(document).ready(function () {
-  function addClipboardFunctionality() {
-    $("pre").each(function () {
-      var $pre = $(this);
-      if ($pre.hasClass("clip-processed")) return;
+  // --- bind a specific block/button pair (optional) ---
+  function bindSingleButton() {
+    const pre = document.getElementById('code-block');
+    const btn = document.getElementById('copy-btn');
+    if (!pre || !btn) return;
 
-      $pre.addClass("clip-processed");
+    // prevent duplicate handlers after rebinds
+    const clone = btn.cloneNode(true);
+    btn.replaceWith(clone);
 
-      var $btn = $('<button class="clipboard-button" title="Copy code"><i class="fa fa-clipboard" aria-hidden="true"></i></button>');
+    clone.addEventListener('click', async () => {
+      const text = getPreText(pre);
+      await copyTextExactly(text);
+      const old = clone.textContent;
+      clone.textContent = 'Copied';
+      setTimeout(() => (clone.textContent = old), 1000);
+    });
+  }
 
-      $btn.on("click", async function () {
-        const text = getPreRaw($pre[0]);
+  // --- auto-attach buttons to all <pre> (uses jQuery if present) ---
+  function addClipboardToAllPres() {
+    const pres = document.querySelectorAll('pre');
+    pres.forEach(pre => {
+      if (pre.classList.contains('clip-processed')) return;
+      pre.classList.add('clip-processed');
+      pre.style.position = pre.style.position || 'relative';
+
+      const btn = document.createElement('button');
+      btn.className = 'clipboard-button';
+      btn.type = 'button';
+      btn.title = 'Copy code';
+      btn.innerHTML = '<i class="fa fa-clipboard" aria-hidden="true"></i>';
+      btn.style.position = 'absolute';
+      btn.style.top = '.5rem';
+      btn.style.right = '1.5rem';
+      btn.style.zIndex = '10000';
+      btn.style.color = 'skyblue';
+      btn.style.background = 'none';
+      btn.style.border = 'none';
+      btn.style.display = 'none';
+      btn.style.cursor = 'pointer';
+
+      btn.addEventListener('click', async () => {
+        const rawAttr = pre.getAttribute('data-raw');
+        const text = (rawAttr != null ? rawAttr : getPreText(pre));
         await copyTextExactly(text);
-        $btn.html('<i class="fa fa-check" aria-hidden="true"></i>');
-        setTimeout(function(){ $btn.html('<i class="fa fa-clipboard" aria-hidden="true"></i>'); }, 1200);
+        btn.innerHTML = '<i class="fa fa-check" aria-hidden="true"></i>';
+        setTimeout(() => { btn.innerHTML = '<i class="fa fa-clipboard" aria-hidden="true"></i>'; }, 1200);
       });
 
-      $pre.append($btn).hover(
-        function(){ $btn.css("display","block"); },
-        function(){ $btn.css("display","none"); }
-      );
+      pre.addEventListener('mouseenter', () => (btn.style.display = 'block'));
+      pre.addEventListener('mouseleave', () => (btn.style.display = 'none'));
+
+      pre.appendChild(btn);
     });
   }
 
-  addClipboardFunctionality();
+  function initAll() {
+    bindSingleButton();     // optional: only binds if #code-block/#copy-btn exist
+    addClipboardToAllPres();
+  }
 
-  // Re-apply when Thinkific swaps lesson content
-  if (typeof CoursePlayerV2 !== "undefined") {
-    CoursePlayerV2.on("hooks:contentDidChange", function () {
-      setTimeout(addClipboardFunctionality, 500);
+  // Initial run
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAll);
+  } else {
+    initAll();
+  }
+
+  // Re-bind when Thinkific swaps content
+  if (typeof CoursePlayerV2 !== 'undefined') {
+    CoursePlayerV2.on('hooks:contentDidChange', function () {
+      setTimeout(initAll, 500);
     });
   }
-});
-</script>
-
-<!-- Plain JS copy button for the span-based demo block -->
-<script>
-document.getElementById("copy-btn").addEventListener("click", async () => {
-  const pre = document.getElementById("code-block");
-  const text = getPreRaw(pre);
-  await copyTextExactly(text);
-  alert("Copied with newlines preserved!");
-});
-</script>
+})();
