@@ -1,55 +1,5 @@
-/*!
- * CWR Clipboard Functionality
- * 
- * ⚠️  IMPORTANT: CDN HOSTING REQUIRED
- * This JavaScript file MUST be hosted via CDN for optimal performance
- * and to ensure all CWR modules receive updates automatically.
- * 
- * Features:
- * - Smart clipboard detection for terminals, IDEs, and code blocks
- * - Universal terminal theme support (Kali, PowerShell, CMD, etc.)
- * - IDE theme compatibility (VS Code, Sublime, Atom, etc.)
- * - Elevated privileges banner integration
- * - Dynamic content loading support (Thinkific, MutationObserver)
- * 
- * Dependencies:
- * - jQuery 3.x+
- * - Font Awesome 6.x+ (for icons)
- * - Modern browser with Clipboard API support
- * 
- * Usage:
- * - Automatically initializes on DOM ready
- * - Manual trigger: window.addClipboardFunctionality()
- * 
- * Last Updated: 2025-09-25
- * Version: 2.0.0
- * 
- * ⚠️  DEPLOYMENT REMINDER:
- * After any modifications to this file:
- * 1. Test across all terminal and IDE themes
- * 2. Verify dynamic content compatibility  
- * 3. Update version number above
- * 4. Deploy to CDN immediately
- * 5. Update documentation in README-CLIPBOARD.md
- */
-
 $(document).ready(function () {
     function addClipboardFunctionality() {
-        // First, handle div-based IDE blocks that don't have <pre> elements
-        $('.ide-block').each(function() {
-            var $ideBlock = $(this);
-            
-            // Skip if clipboard button is already added
-            if ($ideBlock.find('.clipboard-button').length > 0) {
-                return;
-            }
-            
-            // Check if this is a div-based IDE (has .line-content elements)
-            if ($ideBlock.find('.line-content').length > 0) {
-                addClipboardButtonToIDE($ideBlock);
-            }
-        });
-        
         // Add clipboard functionality to relevant <pre> elements
         $("pre").each(function () {
             var $this = $(this);
@@ -278,11 +228,6 @@ $(document).ready(function () {
         // Check if this is inside an IDE block
         var ideBlock = $preElement.closest('.ide-block');
         if (ideBlock.length > 0) {
-            // Check if this is a div-based IDE
-            if (ideBlock.find('.line-content').length > 0) {
-                return extractIdeCodeFromDiv(ideBlock);
-            }
-            // Otherwise use pre-based extraction
             return extractIdeCode($preElement);
         }
 
@@ -335,120 +280,7 @@ $(document).ready(function () {
         return commands.length > 0 ? commands.join('\\n') : fullText.trim();
     }
 
-    // Add clipboard button to div-based IDE blocks
-    function addClipboardButtonToIDE($ideBlock) {
-        // Create the clipboard button with improved styling
-        var buttonHtml = $(
-            '<button class="clipboard-button" style="' +
-            'position: absolute; ' +
-            'top: 0.5rem; ' +
-            'right: 0.5rem; ' +
-            'z-index: 10000; ' +
-            'color: #3DD1A5; ' +
-            'background: rgba(0, 0, 0, 0.7); ' +
-            'border: 1px solid rgba(61, 209, 165, 0.3); ' +
-            'border-radius: 4px; ' +
-            'padding: 0.5rem 0.75rem; ' +
-            'cursor: pointer; ' +
-            'font-size: 0.875rem; ' +
-            'font-weight: 600; ' +
-            'transition: all 0.3s ease; ' +
-            'display: none; ' +
-            'backdrop-filter: blur(10px); ' +
-            'box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);' +
-            '" title="Copy code">' +
-            '<i class="fa fa-copy" aria-hidden="true"></i> Copy' +
-            '</button>'
-        );
-        
-        // Enhanced click functionality
-        buttonHtml.on("click", function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            var text = extractIdeCodeFromDiv($ideBlock);
-            
-            // Copy to clipboard
-            navigator.clipboard.writeText(text).then(function () {
-                // Success feedback
-                buttonHtml.html('<i class="fa fa-check" aria-hidden="true"></i> Copied!')
-                         .css({
-                             'color': '#22c55e',
-                             'border-color': 'rgba(34, 197, 94, 0.5)',
-                             'background': 'rgba(34, 197, 94, 0.1)'
-                         });
-                
-                setTimeout(function () {
-                    buttonHtml.html('<i class="fa fa-copy" aria-hidden="true"></i> Copy')
-                             .css({
-                                 'color': '#3DD1A5',
-                                 'border-color': 'rgba(61, 209, 165, 0.3)',
-                                 'background': 'rgba(0, 0, 0, 0.7)'
-                             });
-                }, 2000);
-            }).catch(function (err) {
-                console.error("Clipboard write failed:", err);
-                
-                // Error feedback
-                buttonHtml.html('<i class="fa fa-exclamation-triangle" aria-hidden="true"></i> Error')
-                         .css({
-                             'color': '#ef4444',
-                             'border-color': 'rgba(239, 68, 68, 0.5)',
-                             'background': 'rgba(239, 68, 68, 0.1)'
-                         });
-                
-                setTimeout(function () {
-                    buttonHtml.html('<i class="fa fa-copy" aria-hidden="true"></i> Copy')
-                             .css({
-                                 'color': '#3DD1A5',
-                                 'border-color': 'rgba(61, 209, 165, 0.3)',
-                                 'background': 'rgba(0, 0, 0, 0.7)'
-                             });
-                }, 2000);
-            });
-        });
-        
-        // Ensure IDE block is positioned relatively
-        if ($ideBlock.css('position') === 'static') {
-            $ideBlock.css('position', 'relative');
-        }
-        
-        // Append the button
-        $ideBlock.append(buttonHtml);
-        
-        // Enhanced hover functionality
-        $ideBlock.hover(
-            function () {
-                buttonHtml.stop().fadeIn(200).css({
-                    'transform': 'translateY(0)',
-                    'opacity': '1'
-                });
-            },
-            function () {
-                buttonHtml.stop().fadeOut(150);
-            }
-        );
-    }
-    
-    // Extract code from div-based IDE structure
-    function extractIdeCodeFromDiv($ideBlock) {
-        var codeLines = $ideBlock.find('.line-content');
-        var codeText = [];
-        
-        codeLines.each(function() {
-            var lineText = $(this).text();
-            // Handle empty lines (non-breaking space)
-            if (lineText === '\u00A0' || lineText === ' ') {
-                codeText.push('');
-            } else {
-                codeText.push(lineText);
-            }
-        });
-        
-        return codeText.join('\n');
-    }
-    
-    // Extract IDE code without line numbers (for pre-based IDEs)
+    // Extract IDE code without line numbers
     function extractIdeCode($preElement) {
         var $clone = $preElement.clone();
         
