@@ -228,6 +228,14 @@ $(document).ready(function () {
         // Check if this is inside an IDE block
         var ideBlock = $preElement.closest('.ide-block');
         if (ideBlock.length > 0) {
+            // For IDE blocks, check if it's the new format with ide-content class
+            if ($preElement.hasClass('ide-content')) {
+                // Directly get the text content preserving all whitespace
+                var elem = $preElement[0];
+                // Use innerText for better whitespace preservation
+                return elem.innerText || elem.textContent || $preElement.text();
+            }
+            // Otherwise use the legacy extraction method
             return extractIdeCode($preElement);
         }
 
@@ -289,10 +297,11 @@ $(document).ready(function () {
         
         // Check if it's a pre.ide-content element (new format without line numbers)
         if ($preElement.hasClass('ide-content')) {
-            // For the new IDE format, preserve all whitespace including empty lines
-            // Use innerText to preserve formatting, or fallback to textContent
-            var content = $clone[0].innerText || $clone[0].textContent || $clone.text();
-            // Don't trim or modify - return exactly as is
+            // For IDE content, directly use the DOM element's textContent
+            // which should preserve all whitespace including newlines
+            var content = $preElement[0].textContent;
+            
+            // Don't trim or modify the content - return as-is to preserve formatting
             return content;
         }
         
