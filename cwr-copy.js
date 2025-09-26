@@ -289,8 +289,11 @@ $(document).ready(function () {
         
         // Check if it's a pre.ide-content element (new format without line numbers)
         if ($preElement.hasClass('ide-content')) {
-            // For the new IDE format, just return the text as-is
-            return $clone.text();
+            // For the new IDE format, preserve all whitespace including empty lines
+            // Use innerText to preserve formatting, or fallback to textContent
+            var content = $clone[0].innerText || $clone[0].textContent || $clone.text();
+            // Don't trim or modify - return exactly as is
+            return content;
         }
         
         // Legacy format with line numbers embedded in the text
