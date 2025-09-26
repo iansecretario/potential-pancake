@@ -228,12 +228,20 @@ $(document).ready(function () {
         // Check if this is inside an IDE block
         var ideBlock = $preElement.closest('.ide-block');
         if (ideBlock.length > 0) {
-            // For IDE blocks, check if it's the new format with ide-content class
-            if ($preElement.hasClass('ide-content')) {
-                // Directly get the text content preserving all whitespace
-                var elem = $preElement[0];
-                // Use innerText for better whitespace preservation
-                return elem.innerText || elem.textContent || $preElement.text();
+            // Find the pre.ide-content element within the IDE block
+            var ideContent = ideBlock.find('pre.ide-content');
+            if (ideContent.length > 0) {
+                // Use innerText which better preserves formatting including empty lines
+                // If innerText is not available (some browsers), fall back to textContent
+                var elem = ideContent[0];
+                var content = elem.innerText;
+                
+                // If innerText is undefined (might happen in some contexts), use textContent
+                if (content === undefined) {
+                    content = elem.textContent;
+                }
+                
+                return content;
             }
             // Otherwise use the legacy extraction method
             return extractIdeCode($preElement);
@@ -290,20 +298,25 @@ $(document).ready(function () {
 
     // Extract IDE code without line numbers
     function extractIdeCode($preElement) {
+        // Check if it's a pre.ide-content element (new format without line numbers)
+        if ($preElement.hasClass('ide-content')) {
+            // Use innerText for better whitespace preservation
+            var elem = $preElement[0];
+            var content = elem.innerText;
+            
+            // Fallback to textContent if innerText is not available
+            if (content === undefined) {
+                content = elem.textContent;
+            }
+            
+            return content;
+        }
+        
+        // For legacy format, clone and process
         var $clone = $preElement.clone();
         
         // Remove clipboard button
         $clone.find('.clipboard-button').remove();
-        
-        // Check if it's a pre.ide-content element (new format without line numbers)
-        if ($preElement.hasClass('ide-content')) {
-            // For IDE content, directly use the DOM element's textContent
-            // which should preserve all whitespace including newlines
-            var content = $preElement[0].textContent;
-            
-            // Don't trim or modify the content - return as-is to preserve formatting
-            return content;
-        }
         
         // Legacy format with line numbers embedded in the text
         var text = $clone.text();
