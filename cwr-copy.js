@@ -11,7 +11,7 @@ $(document).ready(function () {
 
             // Only add clipboard to specific types of pre elements
             var shouldAddClipboard = false;
-            
+
             // 1. Pre elements with terminal-command class
             if ($this.hasClass('terminal-command')) {
                 shouldAddClipboard = true;
@@ -21,7 +21,7 @@ $(document).ready(function () {
                 // Only add to terminal blocks if this pre contains actual commands
                 var terminalBlock = $this.closest('.terminal-block');
                 var hasTerminalCommand = terminalBlock.find('pre.terminal-command').length > 0;
-                
+
                 // If there's a specific terminal-command pre, only add button to that one
                 if (hasTerminalCommand) {
                     shouldAddClipboard = $this.hasClass('terminal-command');
@@ -47,7 +47,7 @@ $(document).ready(function () {
             if (!shouldAddClipboard) {
                 return;
             }
-            
+
             // Create the clipboard button with improved styling
                 var buttonHtml = $(
                     '<button class="clipboard-button" style="' +
@@ -75,7 +75,7 @@ $(document).ready(function () {
                 buttonHtml.on("click", function (e) {
                     e.preventDefault();
                     e.stopPropagation();
-                    
+
                     var text = getClipboardText($this);
 
                     // Copy to clipboard
@@ -87,7 +87,7 @@ $(document).ready(function () {
                                      'border-color': 'rgba(34, 197, 94, 0.5)',
                                      'background': 'rgba(34, 197, 94, 0.1)'
                                  });
-                        
+
                         setTimeout(function () {
                             buttonHtml.html('<i class="fa fa-clipboard" aria-hidden="true"></i>')
                                      .css({
@@ -98,7 +98,7 @@ $(document).ready(function () {
                         }, 2000);
                     }).catch(function (err) {
                         console.error("Clipboard write failed:", err);
-                        
+
                         // Error feedback
                         buttonHtml.html('<i class="fa fa-exclamation-triangle" aria-hidden="true"></i>')
                                  .css({
@@ -106,7 +106,7 @@ $(document).ready(function () {
                                      'border-color': 'rgba(239, 68, 68, 0.5)',
                                      'background': 'rgba(239, 68, 68, 0.1)'
                                  });
-                        
+
                         setTimeout(function () {
                             buttonHtml.html('<i class="fa fa-clipboard" aria-hidden="true"></i>')
                                      .css({
@@ -122,7 +122,7 @@ $(document).ready(function () {
                 var $buttonParent = $this;
                 var $terminalBlock = $this.closest('.terminal-block');
                 var $ideBlock = $this.closest('.ide-block');
-                
+
                 // If this is inside a terminal block, position button on the terminal block
                 if ($terminalBlock.length > 0) {
                     $buttonParent = $terminalBlock;
@@ -163,7 +163,7 @@ $(document).ready(function () {
                 } else if ($ideBlock.length > 0) {
                     $hoverTarget = $ideBlock;
                 }
-                
+
                 $hoverTarget.hover(
                     function () {
                         // Show button with fade in
@@ -171,7 +171,7 @@ $(document).ready(function () {
                             'transform': 'translateY(0)',
                             'opacity': '1'
                         });
-                        
+
                         // Adjust position based on content height and type
                         if ($terminalBlock.length > 0) {
                             // For terminal blocks, position relative to the header
@@ -220,7 +220,7 @@ $(document).ready(function () {
             if (terminalCommand.length > 0) {
                 return terminalCommand.text().trim();
             }
-            
+
             // Fallback: extract command from terminal content
             return extractTerminalCommand($preElement);
         }
@@ -231,15 +231,26 @@ $(document).ready(function () {
             // Find the pre.ide-content element within the IDE block
             var ideContent = ideBlock.find('pre.ide-content');
             if (ideContent.length > 0) {
-                // Get the text content directly from the pre element
-                var content = ideContent[0].textContent;
+                var elem = ideContent[0];
+                // Clone the element to avoid modifying the original
+                var $clone = ideContent.clone();
+
+                // For pre elements with white-space: pre-wrap, textContent should preserve all whitespace
+                // including multiple consecutive newlines
+                var content = elem.textContent;
+                // Remove the clipboard button from the clone
+                $clone.find('.clipboard-button').remove();
                 
-                // Fix: Add missing empty line between import statements and comments
-                // This is a common issue with contenteditable pre elements losing empty lines
-                if (content.includes('import struct\n#')) {
-                    content = content.replace(/import struct\n#/g, 'import struct\n\n#');
+                // Use innerText which preserves visual formatting better than textContent
+                // innerText respects the CSS white-space property and preserves empty lines
+                var content = $clone[0].innerText;
+                
+                // If innerText is undefined (some contexts), fall back to textContent
+                if (content === undefined) {
+                    content = $clone[0].textContent;
                 }
-                
+
+                // Don't modify the content - return it exactly as stored in the DOM
                 return content;
             }
             // Otherwise use the legacy extraction method
@@ -262,7 +273,7 @@ $(document).ready(function () {
         var fullText = $preElement.text();
         var lines = fullText.split('\\n');
         var commands = [];
-        
+
         for (var i = 0; i < lines.length; i++) {
             var line = lines[i].trim();
             if (line) {
@@ -291,7 +302,7 @@ $(document).ready(function () {
                 }
             }
         }
-        
+
         return commands.length > 0 ? commands.join('\\n') : fullText.trim();
     }
 
@@ -299,45 +310,53 @@ $(document).ready(function () {
     function extractIdeCode($preElement) {
         // Check if it's a pre.ide-content element (new format without line numbers)
         if ($preElement.hasClass('ide-content')) {
-            // Get text content directly
-            var content = $preElement[0].textContent;
+            // For pre elements, textContent preserves exact whitespace
+            return $preElement[0].textContent;
+            // Clone to avoid modifying the original
+            var $clone = $preElement.clone();
             
-            // Fix: Add missing empty line between import statements and comments
-            if (content.includes('import struct\n#')) {
-                content = content.replace(/import struct\n#/g, 'import struct\n\n#');
+            // Remove any clipboard buttons that might be inside
+            $clone.find('.clipboard-button').remove();
+            
+            // Use innerText to preserve visual formatting
+            var content = $clone[0].innerText;
+            
+            // Fallback if innerText is undefined
+            if (content === undefined) {
+                content = $clone[0].textContent;
             }
             
             return content;
         }
-        
+
         // For legacy format, clone and process
         var $clone = $preElement.clone();
-        
+
         // Remove clipboard button
         $clone.find('.clipboard-button').remove();
-        
+
         // Legacy format with line numbers embedded in the text
         var text = $clone.text();
-        
+
         // Split into lines and process
         var lines = text.split('\n');
         var codeLines = [];
-        
+
         for (var i = 0; i < lines.length; i++) {
             var line = lines[i];
-            
+
             // Skip line numbers (lines that start with just numbers and whitespace)
             if (line.match(/^\s*\d+\s*$/)) {
                 continue;
             }
-            
+
             // Remove line numbers from the beginning of lines
             var cleanLine = line.replace(/^\s*\d+\s+/, '');
-            
+
             // IMPORTANT: Preserve empty lines
             codeLines.push(cleanLine);
         }
-        
+
         return codeLines.join('\n');
     }
 
@@ -358,7 +377,7 @@ $(document).ready(function () {
     if (typeof MutationObserver !== "undefined") {
         var observer = new MutationObserver(function(mutations) {
             var shouldReapply = false;
-            
+
             mutations.forEach(function(mutation) {
                 if (mutation.type === 'childList') {
                     mutation.addedNodes.forEach(function(node) {
@@ -371,7 +390,7 @@ $(document).ready(function () {
                     });
                 }
             });
-            
+
             if (shouldReapply) {
                 setTimeout(addClipboardFunctionality, 100);
             }
@@ -389,7 +408,7 @@ $(document).ready(function () {
         $('.clipboard-button').each(function() {
             var $button = $(this);
             var $pre = $button.closest('pre');
-            
+
             if ($pre.length > 0) {
                 var preHeight = $pre.outerHeight();
                 if (preHeight < 60) {
