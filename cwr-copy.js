@@ -1,38 +1,3 @@
-/*!
- * CWR Clipboard Functionality
- * 
- * ⚠️  IMPORTANT: CDN HOSTING REQUIRED
- * This JavaScript file MUST be hosted via CDN for optimal performance
- * and to ensure all CWR modules receive updates automatically.
- * 
- * Features:
- * - Smart clipboard detection for terminals, IDEs, and code blocks
- * - Universal terminal theme support (Kali, PowerShell, CMD, etc.)
- * - IDE theme compatibility (VS Code, Sublime, Atom, etc.)
- * - Elevated privileges banner integration
- * - Dynamic content loading support (Thinkific, MutationObserver)
- * 
- * Dependencies:
- * - jQuery 3.x+
- * - Font Awesome 6.x+ (for icons)
- * - Modern browser with Clipboard API support
- * 
- * Usage:
- * - Automatically initializes on DOM ready
- * - Manual trigger: window.addClipboardFunctionality()
- * 
- * Last Updated: 2025-09-25
- * Version: 2.0.0
- * 
- * ⚠️  DEPLOYMENT REMINDER:
- * After any modifications to this file:
- * 1. Test across all terminal and IDE themes
- * 2. Verify dynamic content compatibility  
- * 3. Update version number above
- * 4. Deploy to CDN immediately
- * 5. Update documentation in README-CLIPBOARD.md
- */
-
 $(document).ready(function () {
     function addClipboardFunctionality() {
         // Add clipboard functionality to relevant <pre> elements
@@ -242,66 +207,78 @@ $(document).ready(function () {
 
     // Smart content detection function with selective whitespace preservation
     function getClipboardText($preElement) {
-        // Check if this is a terminal command (has terminal-command class)
-        if ($preElement.hasClass('terminal-command')) {
-            // For terminal commands, preserve exact content including leading/trailing spaces
-            return getPreservedText($preElement);
-        }
-
-        // Check if this is inside a terminal block
-        var terminalBlock = $preElement.closest('.terminal-block');
-        if (terminalBlock.length > 0) {
-            // Look for terminal-command class within the terminal block
-            var terminalCommand = terminalBlock.find('pre.terminal-command');
-            if (terminalCommand.length > 0) {
-                return getPreservedText(terminalCommand);
+        // For all pre elements, prioritize perfect whitespace preservation first
+        if ($preElement.is('pre')) {
+            // Check if this is a terminal command (has terminal-command class)
+            if ($preElement.hasClass('terminal-command')) {
+                // For terminal commands, preserve exact content including leading/trailing spaces
+                return getPreElementText($preElement);
             }
-            
-            // Fallback: extract command from terminal content with preservation
-            return extractTerminalCommand($preElement);
+
+            // Check if this is inside a terminal block
+            var terminalBlock = $preElement.closest('.terminal-block');
+            if (terminalBlock.length > 0) {
+                // Look for terminal-command class within the terminal block
+                var terminalCommand = terminalBlock.find('pre.terminal-command');
+                if (terminalCommand.length > 0) {
+                    return getPreElementText(terminalCommand);
+                }
+                
+                // Fallback: extract command from terminal content with preservation
+                return extractTerminalCommand($preElement);
+            }
+
+            // Check if this is inside an IDE block
+            var ideBlock = $preElement.closest('.ide-block');
+            if (ideBlock.length > 0) {
+                // For IDE blocks, preserve whitespace and formatting
+                return extractIdeCode($preElement);
+            }
+
+            // For any other pre element, use perfect whitespace preservation
+            return getPreElementText($preElement);
         }
 
-        // Check if this is inside an IDE block
-        var ideBlock = $preElement.closest('.ide-block');
-        if (ideBlock.length > 0) {
-            // For IDE blocks, preserve whitespace and formatting
-            return extractIdeCode($preElement);
-        }
-
-        // Default behavior for other pre elements - normal cleanup
+        // Default behavior for non-pre elements
         return getStandardText($preElement);
     }
     
     // Standard text extraction with normal cleanup for non-IDE/terminal elements
     function getStandardText($element) {
-        return $element.clone()
-            .find('.clipboard-button')
-            .remove()
-            .end()
-            .text()
+        var $clone = $element.clone();
+        $clone.find('.clipboard-button').remove();
+        
+        // For pre elements, use innerText to preserve whitespace
+        if ($element.is('pre') && $clone[0].innerText !== undefined) {
+            return $clone[0].innerText;
+        }
+        
+        // For other elements, use standard text extraction with cleanup
+        return $clone.text()
             .trim()
             .replace(/\s+$/gm, '') // Remove trailing whitespace from lines
             .replace(/^\s*\n/, ''); // Remove leading empty lines
     }
     
-    // Enhanced text extraction with perfect whitespace preservation
+    // Enhanced text extraction with perfect whitespace preservation and BR conversion
     function getPreservedText($element) {
-        // Method 1: Try to use textContent which preserves whitespace best
-        var textContent = $element[0].textContent;
-        
         // Remove clipboard button content if present
         var $clone = $element.clone();
         $clone.find('.clipboard-button').remove();
         
-        // Method 2: Use the cleaned clone if textContent failed
-        if (!textContent || textContent.trim().length === 0) {
-            textContent = $clone[0].textContent || $clone[0].innerText || $clone.text();
+        // Method 1: Use innerText to preserve whitespace and line breaks exactly as rendered
+        var textContent;
+        if ($clone[0].innerText !== undefined) {
+            // innerText preserves visual formatting including whitespace and line breaks
+            textContent = $clone[0].innerText;
         } else {
-            // Remove button text from main content
-            var buttonText = $element.find('.clipboard-button').text();
-            if (buttonText) {
-                textContent = textContent.replace(buttonText, '');
-            }
+            // Fallback for older browsers - use textContent but try to preserve formatting
+            textContent = $clone[0].textContent || $clone.text();
+        }
+        
+        // Method 2: Fallback to textContent if innerText failed
+        if (!textContent || textContent.trim().length === 0) {
+            textContent = $clone[0].textContent || $clone.text();
         }
         
         // Method 3: Manual extraction using TreeWalker for ultimate accuracy
@@ -312,16 +289,62 @@ $(document).ready(function () {
         return textContent;
     }
     
-    // Manual text extraction using TreeWalker to preserve exact whitespace
+    // Specialized function for extracting text from pre elements with perfect whitespace preservation
+    function getPreElementText($preElement) {
+        var $clone = $preElement.clone();
+        $clone.find('.clipboard-button').remove();
+        
+        var element = $clone[0];
+        
+        // Method 1: Use innerText if available (best for whitespace preservation)
+        if (typeof element.innerText === 'string') {
+            return element.innerText;
+        }
+        
+        // Method 2: Use textContent as fallback
+        if (typeof element.textContent === 'string') {
+            return element.textContent;
+        }
+        
+        // Method 3: Check for innerText as property (older browsers)
+        if (element.innerText !== undefined && element.innerText !== null) {
+            return String(element.innerText);
+        }
+        
+        // Method 4: jQuery text() as last resort
+        return $clone.text();
+    }
+    
+    // Manual text extraction using TreeWalker to preserve exact whitespace and handle BR tags
     function extractTextWithTreeWalker(element) {
         if (!element || !document.createTreeWalker) {
-            return element ? (element.textContent || element.innerText || '') : '';
+            // Fallback: use innerText for better whitespace preservation
+            if (element && element.innerText !== undefined) {
+                return element.innerText;
+            }
+            return element ? (element.textContent || '') : '';
         }
         
         var walker = document.createTreeWalker(
             element,
-            NodeFilter.SHOW_TEXT,
-            null,
+            NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+            {
+                acceptNode: function(node) {
+                    // Accept text nodes and BR elements
+                    if (node.nodeType === Node.TEXT_NODE) {
+                        // Skip text nodes that are inside clipboard buttons
+                        if ($(node).closest('.clipboard-button').length) {
+                            return NodeFilter.FILTER_REJECT;
+                        }
+                        return NodeFilter.FILTER_ACCEPT;
+                    }
+                    // Accept BR elements
+                    if (node.nodeType === Node.ELEMENT_NODE && node.tagName.toLowerCase() === 'br') {
+                        return NodeFilter.FILTER_ACCEPT;
+                    }
+                    return NodeFilter.FILTER_SKIP;
+                }
+            },
             false
         );
         
@@ -329,9 +352,12 @@ $(document).ready(function () {
         var node;
         
         while (node = walker.nextNode()) {
-            // Skip text nodes that are inside clipboard buttons
-            if (!$(node).closest('.clipboard-button').length) {
+            if (node.nodeType === Node.TEXT_NODE) {
+                // Preserve text content exactly as is (including whitespace)
                 textContent += node.textContent;
+            } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName.toLowerCase() === 'br') {
+                // Convert BR tags to actual newlines
+                textContent += '\n';
             }
         }
         
@@ -341,7 +367,7 @@ $(document).ready(function () {
     // Extract terminal command without prompt - preserve newlines
     function extractTerminalCommand($preElement) {
         // For terminal blocks, preserve the exact content but clean prompts
-        var fullText = getPreservedText($preElement);
+        var fullText = getPreElementText($preElement);
         var lines = fullText.split('\n');
         var commands = [];
         
@@ -383,7 +409,7 @@ $(document).ready(function () {
     // Extract IDE code preserving exact formatting and indentation
     function extractIdeCode($preElement) {
         // First try to get the exact content with preserved whitespace
-        var fullText = getPreservedText($preElement);
+        var fullText = getPreElementText($preElement);
         
         // Check if this IDE block has line numbers that need to be removed
         var hasLineNumbers = $preElement.closest('.ide-block').find('.line-number').length > 0;
