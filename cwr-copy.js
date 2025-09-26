@@ -34,11 +34,6 @@ $(document).ready(function () {
             else if ($this.closest('.ide-block').length > 0) {
                 shouldAddClipboard = true;
             }
-            // 3a. Div-based IDE blocks (for new structure without pre tags)
-            else if ($this.parent().hasClass('ide-editor') || $this.closest('.ide-editor').length > 0) {
-                // Skip this iteration, we'll handle IDE blocks differently
-                return;
-            }
             // 4. Standalone pre elements (not inside terminal or IDE blocks)
             else if ($this.closest('.terminal-block').length === 0 && 
                      $this.closest('.ide-block').length === 0) {
@@ -233,6 +228,48 @@ $(document).ready(function () {
         // Check if this is inside an IDE block
         var ideBlock = $preElement.closest('.ide-block');
         if (ideBlock.length > 0) {
+            // Find the pre.ide-content element within the IDE block
+            var ideContent = ideBlock.find('pre.ide-content');
+            if (ideContent.length > 0) {
+                // Try using Selection API to get exact displayed text
+                var elem = ideContent[0];
+                var content;
+                
+                // Save current selection
+                var selection = window.getSelection();
+                var savedRange = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+                
+                // Create a new range and select all content
+                var range = document.createRange();
+                range.selectNodeContents(elem);
+                selection.removeAllRanges();
+                selection.addRange(range);
+                
+                // Get the selected text which should preserve formatting
+                content = selection.toString();
+                
+                // Restore previous selection
+                selection.removeAllRanges();
+                if (savedRange) {
+                    selection.addRange(savedRange);
+                }
+                
+                // Remove any "Copy to clipboard" text if it got included
+                content = content.replace(/Copy to clipboard$/, '').trim();
+                
+                // If we still don't have all lines, count visible lines and ensure they're preserved
+                var visibleLines = elem.innerText || elem.textContent;
+                var visibleLineCount = (visibleLines.match(/\n/g) || []).length + 1;
+                var copiedLineCount = (content.match(/\n/g) || []).length + 1;
+                
+                // If we're missing lines, use innerText as fallback
+                if (copiedLineCount < visibleLineCount) {
+                    content = elem.innerText || elem.textContent;
+                }
+                
+                return content;
+            }
+            // Otherwise use the legacy extraction method
             return extractIdeCode($preElement);
         }
 
@@ -285,58 +322,35 @@ $(document).ready(function () {
         return commands.length > 0 ? commands.join('\\n') : fullText.trim();
     }
 
-    // Extract IDE code from div-based structure (new IDE format)
-    function extractIdeCodeFromDiv($ideBlock) {
-        var codeLines = $ideBlock.find('.line-content');
-        
-        if (codeLines.length > 0) {
-            var codeText = '';
-            codeLines.each(function() {
-                var lineText = $(this).text();
-                // Handle empty lines (non-breaking space)
-                if (lineText === '\u00A0' || lineText === ' ' || lineText.trim() === '') {
-                    codeText += '\n';
-                } else {
-                    codeText += lineText + '\n';
-                }
-            });
-            return codeText.trim();
-        }
-        
-        // Fallback to extracting from pre element if exists
-        var $pre = $ideBlock.find('pre');
-        if ($pre.length > 0) {
-            return extractIdeCode($pre);
-        }
-        
-        return '';
-    }
-    
-    // Extract IDE code without line numbers (supports both div-based and pre-based structures)
+    // Extract IDE code without line numbers
     function extractIdeCode($preElement) {
-        // First check if we're in a div-based IDE block
-        var $ideBlock = $preElement.closest('.ide-block');
-        if ($ideBlock.length === 0) {
-            // If $preElement itself is an IDE block
-            $ideBlock = $preElement.hasClass('ide-block') ? $preElement : null;
-        }
-        
-        // If we have an IDE block, check for div-based structure first
-        if ($ideBlock && $ideBlock.length > 0) {
-            var codeLines = $ideBlock.find('.line-content');
-            if (codeLines.length > 0) {
-                // Use the div-based extraction
-                return extractIdeCodeFromDiv($ideBlock);
+        // Check if it's a pre.ide-content element (new format without line numbers)
+        if ($preElement.hasClass('ide-content')) {
+            // Clone to avoid modifying the original
+            var $clone = $preElement.clone();
+            
+            // Remove any clipboard buttons that might be inside
+            $clone.find('.clipboard-button').remove();
+            
+            // Force use of innerText for visual formatting preservation
+            var elem = $clone[0];
+            var content = elem.innerText;
+            
+            // Only use textContent as last resort
+            if (typeof content === 'undefined' || content === null) {
+                content = elem.textContent;
             }
+            
+            return content;
         }
         
-        // Fallback to pre-based extraction
+        // For legacy format, clone and process
         var $clone = $preElement.clone();
         
         // Remove clipboard button
         $clone.find('.clipboard-button').remove();
         
-        // Get text content
+        // Legacy format with line numbers embedded in the text
         var text = $clone.text();
         
         // Split into lines and process
@@ -354,12 +368,11 @@ $(document).ready(function () {
             // Remove line numbers from the beginning of lines
             var cleanLine = line.replace(/^\s*\d+\s+/, '');
             
-            if (cleanLine.trim()) {
-                codeLines.push(cleanLine);
-            }
+            // IMPORTANT: Preserve empty lines
+            codeLines.push(cleanLine);
         }
         
-        return codeLines.length > 0 ? codeLines.join('\n') : text.trim();
+        return codeLines.join('\n');
     }
 
     // Enhanced global function for manual triggering
@@ -417,114 +430,8 @@ $(document).ready(function () {
                     $button.css('top', '0.25rem');
                 } else {
                     $button.css('top', '0.5rem');
-                });
-            });
-        });
-        
-        // Handle div-based IDE blocks (new structure without pre tags)
-        $(".ide-block").each(function () {
-            var $ideBlock = $(this);
-            
-            // Skip if clipboard button is already added
-            if ($ideBlock.find(".clipboard-button").length > 0) {
-                return;
-            }
-            
-            // Check if this IDE block uses the div-based structure
-            if ($ideBlock.find('.ide-editor .code-line').length > 0) {
-                // Create the clipboard button for IDE blocks
-                var buttonHtml = $(
-                    '<button class="clipboard-button" style="' +
-                    'position: absolute; ' +
-                    'top: 0.5rem; ' +
-                    'right: 0.5rem; ' +
-                    'z-index: 10000; ' +
-                    'color: #3DD1A5; ' +
-                    'background: rgba(0, 0, 0, 0.7); ' +
-                    'border: 1px solid rgba(61, 209, 165, 0.3); ' +
-                    'border-radius: 4px; ' +
-                    'padding: 0.5rem; ' +
-                    'cursor: pointer; ' +
-                    'font-size: 0.875rem; ' +
-                    'transition: all 0.3s ease; ' +
-                    'display: none; ' +
-                    'backdrop-filter: blur(10px); ' +
-                    'box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);' +
-                    '" title="Copy to clipboard">' +
-                    '<i class="fa fa-clipboard" aria-hidden="true"></i>' +
-                    '</button>'
-                );
-                
-                // Enhanced click functionality for IDE blocks
-                buttonHtml.on("click", function (e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    
-                    var text = extractIdeCodeFromDiv($ideBlock);
-                    
-                    // Copy to clipboard
-                    navigator.clipboard.writeText(text).then(function () {
-                        // Success feedback
-                        buttonHtml.html('<i class="fa fa-check" aria-hidden="true"></i>')
-                                 .css({
-                                     'color': '#22c55e',
-                                     'border-color': 'rgba(34, 197, 94, 0.5)',
-                                     'background': 'rgba(34, 197, 94, 0.1)'
-                                 });
-                        
-                        setTimeout(function () {
-                            buttonHtml.html('<i class="fa fa-clipboard" aria-hidden="true"></i>')
-                                     .css({
-                                         'color': '#3DD1A5',
-                                         'border-color': 'rgba(61, 209, 165, 0.3)',
-                                         'background': 'rgba(0, 0, 0, 0.7)'
-                                     });
-                        }, 2000);
-                    }).catch(function (err) {
-                        console.error("Clipboard write failed:", err);
-                        
-                        // Error feedback
-                        buttonHtml.html('<i class="fa fa-exclamation-triangle" aria-hidden="true"></i>')
-                                 .css({
-                                     'color': '#ef4444',
-                                     'border-color': 'rgba(239, 68, 68, 0.5)',
-                                     'background': 'rgba(239, 68, 68, 0.1)'
-                                 });
-                        
-                        setTimeout(function () {
-                            buttonHtml.html('<i class="fa fa-clipboard" aria-hidden="true"></i>')
-                                     .css({
-                                         'color': '#3DD1A5',
-                                         'border-color': 'rgba(61, 209, 165, 0.3)',
-                                         'background': 'rgba(0, 0, 0, 0.7)'
-                                     });
-                        }, 2000);
-                    });
-                });
-                
-                // Ensure IDE block is positioned relatively
-                if ($ideBlock.css('position') === 'static') {
-                    $ideBlock.css('position', 'relative');
                 }
-                
-                // Append the button to the IDE block
-                $ideBlock.append(buttonHtml);
-                
-                // Enhanced hover functionality
-                $ideBlock.hover(
-                    function () {
-                        // Show button with fade in
-                        buttonHtml.stop().fadeIn(200).css({
-                            'transform': 'translateY(0)',
-                            'opacity': '1'
-                        });
-                    },
-                    function () {
-                        // Hide button with fade out
-                        buttonHtml.stop().fadeOut(150);
-                    }
-                );
             }
         });
-    }
-    }
+    });
+});
