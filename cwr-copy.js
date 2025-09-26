@@ -231,13 +231,21 @@ $(document).ready(function () {
             // Find the pre.ide-content element within the IDE block
             var ideContent = ideBlock.find('pre.ide-content');
             if (ideContent.length > 0) {
-                var elem = ideContent[0];
+                // Clone the element to avoid modifying the original
+                var $clone = ideContent.clone();
                 
-                // For pre elements with white-space: pre-wrap, textContent should preserve all whitespace
-                // including multiple consecutive newlines
-                var content = elem.textContent;
+                // Remove the clipboard button from the clone
+                $clone.find('.clipboard-button').remove();
                 
-                // Don't modify the content - return it exactly as stored in the DOM
+                // Use innerText which preserves visual formatting better than textContent
+                // innerText respects the CSS white-space property and preserves empty lines
+                var content = $clone[0].innerText;
+                
+                // If innerText is undefined (some contexts), fall back to textContent
+                if (content === undefined) {
+                    content = $clone[0].textContent;
+                }
+                
                 return content;
             }
             // Otherwise use the legacy extraction method
@@ -297,8 +305,21 @@ $(document).ready(function () {
     function extractIdeCode($preElement) {
         // Check if it's a pre.ide-content element (new format without line numbers)
         if ($preElement.hasClass('ide-content')) {
-            // For pre elements, textContent preserves exact whitespace
-            return $preElement[0].textContent;
+            // Clone to avoid modifying the original
+            var $clone = $preElement.clone();
+            
+            // Remove any clipboard buttons that might be inside
+            $clone.find('.clipboard-button').remove();
+            
+            // Use innerText to preserve visual formatting
+            var content = $clone[0].innerText;
+            
+            // Fallback if innerText is undefined
+            if (content === undefined) {
+                content = $clone[0].textContent;
+            }
+            
+            return content;
         }
         
         // For legacy format, clone and process
