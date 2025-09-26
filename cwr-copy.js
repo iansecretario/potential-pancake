@@ -231,16 +231,13 @@ $(document).ready(function () {
             // Find the pre.ide-content element within the IDE block
             var ideContent = ideBlock.find('pre.ide-content');
             if (ideContent.length > 0) {
-                // Use innerText which better preserves formatting including empty lines
-                // If innerText is not available (some browsers), fall back to textContent
                 var elem = ideContent[0];
-                var content = elem.innerText;
                 
-                // If innerText is undefined (might happen in some contexts), use textContent
-                if (content === undefined) {
-                    content = elem.textContent;
-                }
+                // For pre elements with white-space: pre-wrap, textContent should preserve all whitespace
+                // including multiple consecutive newlines
+                var content = elem.textContent;
                 
+                // Don't modify the content - return it exactly as stored in the DOM
                 return content;
             }
             // Otherwise use the legacy extraction method
@@ -300,16 +297,8 @@ $(document).ready(function () {
     function extractIdeCode($preElement) {
         // Check if it's a pre.ide-content element (new format without line numbers)
         if ($preElement.hasClass('ide-content')) {
-            // Use innerText for better whitespace preservation
-            var elem = $preElement[0];
-            var content = elem.innerText;
-            
-            // Fallback to textContent if innerText is not available
-            if (content === undefined) {
-                content = elem.textContent;
-            }
-            
-            return content;
+            // For pre elements, textContent preserves exact whitespace
+            return $preElement[0].textContent;
         }
         
         // For legacy format, clone and process
